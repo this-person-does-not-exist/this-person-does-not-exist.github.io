@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <title>This Person Does Not Exist Browser</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+          },
+        },
+      };
+
+      document.addEventListener("alpine:init", () => {
+        Alpine.data("gallery", () => ({
+          imageUrl: "https://thispersondoesnotexist.com",
+          page: 1,
+          perPage: 20,
+          batchId: Date.now(),
+          visibleImages: [],
+          sourceQueue: [],
+          addTimer: null,
+          scrollHandler: null,
+          nearBottom: false,
+          pendingNextBatch: false,
+          loading: {},
+          loaded: {},
+          failed: {},
+
+          init() {
+            const params = new URLSearchParams(window.location.search);
+            const requestedPage = Number(params.get("page"));
+            this.page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+            this.addBatch(this.page);
+            this.scrollHandler = () => this.handleScroll();
+            window.addEventListener("scroll", this.scrollHandler, { passive: true });
+            this.$nextTick(() => {
+              if (window.lucide) {
+                window.lucide.createIcons();
+              }
+            });
+          },
+
+          buildImages(page) {
+            return Array.from({ length: this.perPage }, (_, index) => ({
+              id: `${page}-${index + 1}`,
+              number: (page - 1) * this.perPage + index + 1,
+              page,
+              slot: index + 1,
+              src: "",
+              placeholder: this.placeholder(page, index + 1),
+            }));
+          },
+
+          placeholder(page, slot) {
+            const palettes = [
+              { skin: "#d9a178", light: "#f1c8a5", mid: "#b97855", hair: "#5d3428" },
+              { skin: "#c98f68", light: "#e8b894", mid: "#9f6347", hair: "#3f2a23" },
+              { skin: "#e5b98f", light: "#f5d4b2", mid: "#bf7f58", hair: "#6a4636" },
+              { skin: "#b97958", light: "#dca27c", mid: "#86513f", hair: "#2f211c" },
+              { skin: "#f0c9a2", light: "#f8dfc2", mid: "#ca8b62", hair: "#71513f" },
+              { skin: "#a7674d", light: "#c98b68", mid: "#744333", hair: "#241a17" },
+            ];
+            const palette = palettes[(slot + page) % palettes.length];
+            const svg = `
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320">
+                <defs>
+                  <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stop-color="${palette.light}"/>
+                    <stop offset="100%" stop-color="${palette.skin}"/>
+                  </linearGradient>
+                  <filter id="b">
+                    <feGaussianBlur stdDeviation="18"/>
+                  </filter>
+                </defs>
+                <rect width="320" height="320" fill="url(#g)"/>
+                <ellipse cx="${154 + (slot * 7) % 28}" cy="${140 + (slot * 11) % 30}" rx="${72 + (slot * 3) % 18}" ry="${94 + (slot * 5) % 22}" fill="${palette.light}" opacity=".68" filter="url(#b)"/>
+                <circle cx="${122 + (slot * 13) % 56}" cy="${82 + (slot * 17) % 42}" r="${62 + (slot * 5) % 20}" fill="${palette.hair}" opacity=".58" filter="url(#b)"/>
+                <ellipse cx="${170 + (slot * 19) % 34}" cy="${198 + (slot * 11) % 34}" rx="${84 + (slot * 7) % 20}" ry="${72 + (slot * 3) % 18}" fill="${palette.mid}" opacity=".46" filter="url(#b)"/>
+                <path d="M42 286 C94 218 132 222 166 258 C204 298 254 266 300 212 L300 320 L42 320 Z" fill="${palette.hair}" opacity=".34" filter="url(#b)"/>
+              </svg>
+            `.replace(/\s+/g, " ").trim();
+            return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+          },
+
+          addBatch(page) {
+            const images = this.buildImages(page);
+            this.visibleImages.push(...images);
+            this.sourceQueue.push(...images);
+            this.startSourceQueue();
+          },
+
+          startSourceQueue() {
+            if (this.addTimer) {
+              return;
+            }
+            this.addTimer = setInterval(() => {
+              const image = this.sourceQueue.shift();
+              if (!image) {
+                clearInterval(this.addTimer);
+                this.addTimer = null;
+                return;
+              }
+              image.src = `${this.imageUrl}?page=${image.page}&slot=${image.slot}&batch=${this.batchId}`;
+              this.markLoading(image.id);
+            }, 1000);
+          },
+
+          handleScroll() {
+            const scrollBottom = window.innerHeight + window.scrollY;
+            const triggerPoint = document.documentElement.scrollHeight - 500;
+            if (scrollBottom < triggerPoint) {
+              this.nearBottom = false;
+              return;
+            }
+            if (this.nearBottom) {
+              return;
+            }
+            this.nearBottom = true;
+            this.requestNextBatch();
+          },
+
+          requestNextBatch() {
+            if (!this.isBatchLoaded(this.page)) {
+              this.pendingNextBatch = true;
+              return;
+            }
+            this.pendingNextBatch = false;
+            this.page += 1;
+            this.addBatch(this.page);
+          },
+
+          isBatchLoaded(page) {
+            const images = this.visibleImages.filter((image) => image.page === page);
+            return images.length === this.perPage && images.every((image) => this.loaded[image.id]);
+          },
+
+          checkPendingBatch() {
+            if (!this.pendingNextBatch || !this.nearBottom || !this.isBatchLoaded(this.page)) {
+              return;
+            }
+            this.requestNextBatch();
+          },
+
+          batchStatus() {
+            if (this.pendingNextBatch) {
+              return "Next batch is waiting for this batch to finish loading.";
+            }
+            if (!this.isBatchLoaded(this.page)) {
+              return "Loading this batch one image at a time.";
+            }
+            return "Scroll down to load the next batch.";
+          },
+
+          markLoading(id) {
+            this.loading[id] = true;
+            this.loaded[id] = false;
+            this.failed[id] = false;
+          },
+
+          markLoaded(id) {
+            this.loading[id] = false;
+            this.loaded[id] = true;
+            this.checkPendingBatch();
+          },
+
+          markFailed(id) {
+            this.loading[id] = false;
+            this.loaded[id] = false;
+            this.failed[id] = true;
+          },
+
+          navigate(page) {
+            const nextPage = Math.max(1, page);
+            window.location.href = `${window.location.pathname}?page=${nextPage}`;
+          },
+
+          reload() {
+            window.location.reload();
+          },
+        }));
+      });
+    </script>
+  </head>
+  <body class="min-h-screen bg-zinc-50 text-zinc-950">
+    <main x-data="gallery" x-init="init()" class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
+      <header class="flex flex-col gap-4 border-b border-zinc-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-normal text-zinc-950 sm:text-3xl">
+            This Person Does Not Exist
+          </h1>
+          <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
+            Twenty generated portraits per page. Every tile uses the same image source:
+            <span class="font-mono text-xs text-zinc-800">https://thispersondoesnotexist.com</span>
+          </p>
+        </div>
+
+        <nav class="flex flex-wrap items-center gap-2" aria-label="Gallery navigation">
+          <button
+            type="button"
+            class="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-45"
+            :disabled="page === 1"
+            @click="navigate(page - 1)"
+          >
+            <i data-lucide="chevron-left" class="h-4 w-4" aria-hidden="true"></i>
+            Previous
+          </button>
+          <div class="flex h-10 items-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700">
+            Page <span class="ml-1 tabular-nums" x-text="page"></span>
+          </div>
+          <button
+            type="button"
+            class="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-100"
+            @click="navigate(page + 1)"
+          >
+            Next
+            <i data-lucide="chevron-right" class="h-4 w-4" aria-hidden="true"></i>
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-10 items-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800"
+            @click="reload()"
+          >
+            <i data-lucide="refresh-cw" class="h-4 w-4" aria-hidden="true"></i>
+            Reload
+          </button>
+        </nav>
+      </header>
+
+      <section class="grid flex-1 grid-cols-2 gap-3 py-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5" aria-label="Generated portraits">
+        <template x-for="image in visibleImages" :key="image.id">
+          <article class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+            <div class="relative aspect-square overflow-hidden bg-zinc-100">
+              <div
+                class="absolute inset-0 scale-105 bg-cover bg-center blur-xl transition-opacity duration-700"
+                :class="loaded[image.id] ? 'opacity-0' : 'opacity-100'"
+                :style="{ backgroundImage: image.placeholder }"
+                aria-hidden="true"
+              ></div>
+              <div
+                x-show="!image.src || loading[image.id]"
+                class="absolute inset-0 grid place-items-center"
+              >
+                <div class="h-8 w-8 animate-spin rounded-full border-2 border-white/60 border-t-zinc-950 shadow-sm" aria-label="Loading"></div>
+              </div>
+              <template x-if="image.src">
+                <img
+                  class="relative h-full w-full object-cover transition-all duration-700 ease-out"
+                  :class="loaded[image.id] ? 'opacity-100 blur-0 scale-100' : 'opacity-0 blur-md scale-105'"
+                  :src="image.src"
+                  :alt="`Generated portrait ${image.number}`"
+                  @load="markLoaded(image.id)"
+                  @error="markFailed(image.id)"
+                  referrerpolicy="no-referrer"
+                />
+              </template>
+              <div
+                x-show="image.src && failed[image.id]"
+                class="absolute inset-0 grid place-items-center bg-zinc-100 px-3 text-center text-xs font-medium text-red-700"
+              >
+                Image failed to load
+              </div>
+            </div>
+            <div class="flex h-10 items-center border-t border-zinc-200 px-3 text-xs text-zinc-600">
+              <span>#<span x-text="image.number"></span></span>
+            </div>
+          </article>
+        </template>
+      </section>
+
+      <footer class="border-t border-zinc-200 py-6 text-center text-sm text-zinc-600" aria-live="polite">
+        <span x-text="batchStatus()"></span>
+      </footer>
+    </main>
+  </body>
+</html>
