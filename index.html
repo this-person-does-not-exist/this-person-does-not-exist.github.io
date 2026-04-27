@@ -231,36 +231,37 @@
           class="mx-auto w-full max-w-7xl object-contain"
         />
 
-        <nav class="flex w-full overflow-hidden rounded-md border border-zinc-300 bg-white shadow-sm sm:w-fit" aria-label="Gallery navigation">          <button
+        <nav class="flex w-full overflow-hidden rounded-md border border-zinc-300 bg-white shadow-sm sm:w-fit" aria-label="Gallery navigation">
+          <button
             type="button"
-            class="inline-flex h-9 w-12 flex-shrink-0 items-center justify-center border-r border-zinc-300 text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-45"
+            class="inline-flex h-7 w-9 flex-shrink-0 items-center justify-center border-r border-zinc-300 text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-45"
             :disabled="page === 1"
             @click="navigate(page - 1)"
             title="Previous page"
             aria-label="Previous page"
           >
-            <i data-lucide="chevron-left" class="h-4 w-4" aria-hidden="true"></i>
+            <i data-lucide="chevron-left" class="h-3.5 w-3.5" aria-hidden="true"></i>
           </button>
-          <div class="flex h-9 min-w-20 flex-1 items-center justify-center border-r border-zinc-300 px-3 text-xs font-medium text-zinc-700 sm:flex-none">
+          <div class="flex h-7 min-w-16 flex-1 items-center justify-center border-r border-zinc-300 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-600 sm:flex-none">
             Page <span class="ml-1 tabular-nums" x-text="page"></span>
           </div>
           <button
             type="button"
-            class="inline-flex h-9 w-12 flex-shrink-0 items-center justify-center border-r border-zinc-300 text-zinc-800 transition hover:bg-zinc-100"
+            class="inline-flex h-7 w-9 flex-shrink-0 items-center justify-center border-r border-zinc-300 text-zinc-800 transition hover:bg-zinc-100"
             @click="navigate(page + 1)"
             title="Next page"
             aria-label="Next page"
           >
-            <i data-lucide="chevron-right" class="h-4 w-4" aria-hidden="true"></i>
+            <i data-lucide="chevron-right" class="h-3.5 w-3.5" aria-hidden="true"></i>
           </button>
           <button
             type="button"
-            class="inline-flex h-9 w-12 flex-shrink-0 items-center justify-center bg-zinc-950 text-white transition hover:bg-zinc-800"
+            class="inline-flex h-7 w-9 flex-shrink-0 items-center justify-center bg-zinc-950 text-white transition hover:bg-zinc-800"
             @click="reload()"
             title="Reload"
             aria-label="Reload"
           >
-            <i data-lucide="refresh-cw" class="h-4 w-4" aria-hidden="true"></i>
+            <i data-lucide="refresh-cw" class="h-3.5 w-3.5" aria-hidden="true"></i>
           </button>
         </nav>
       </header>
