@@ -122,7 +122,7 @@
 
           continueSourceQueue() {
             this.sourceActive = false;
-            this.startSourceQueue();
+            setTimeout(() => this.startSourceQueue(), 1000);
           },
 
           handleScroll() {
@@ -161,12 +161,18 @@
             this.requestNextBatch();
           },
 
+          remainingInBatch(page) {
+            const images = this.visibleImages.filter((image) => image.page === page);
+            return images.filter((image) => !this.loaded[image.id] && !this.failed[image.id]).length;
+          },
+
           batchStatus() {
+            const remaining = this.remainingInBatch(this.page);
             if (this.pendingNextBatch) {
-              return "Next batch is waiting for this batch to finish loading.";
+              return `Next batch is waiting — ${remaining} ${remaining === 1 ? "portrait" : "portraits"} left in this one.`;
             }
             if (!this.isBatchLoaded(this.page)) {
-              return "Loading this batch one image at a time.";
+              return `Loading this batch one image at a time — ${remaining} of ${this.perPage} left.`;
             }
             return "Scroll down to load the next batch.";
           },
@@ -204,7 +210,7 @@
     </script>
   </head>
   <body class="min-h-screen bg-zinc-50 text-zinc-950">
-    <main x-data="gallery" x-init="init()" class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
+    <main x-data="gallery" class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
       <header class="flex flex-col gap-3 border-b border-zinc-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-xl font-semibold tracking-normal text-zinc-950 sm:text-2xl">
@@ -256,20 +262,23 @@
           <article class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
             <div class="relative aspect-square overflow-hidden bg-zinc-100">
               <div
-                class="absolute inset-0 scale-105 bg-cover bg-center blur-xl transition-opacity duration-700"
+                class="absolute inset-0 scale-105 bg-cover bg-center blur-xl transition-opacity duration-1000"
                 :class="loaded[image.id] ? 'opacity-0' : 'opacity-100'"
                 :style="{ backgroundImage: image.placeholder }"
                 aria-hidden="true"
               ></div>
               <div
                 x-show="loading[image.id]"
+                x-transition:leave="transition-opacity duration-1000 ease-out"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
                 class="absolute inset-0 grid place-items-center"
               >
                 <div class="h-8 w-8 animate-spin rounded-full border-2 border-white/60 border-t-zinc-950 shadow-sm" aria-label="Loading"></div>
               </div>
               <template x-if="image.src">
                 <img
-                  class="relative h-full w-full object-cover transition-all duration-700 ease-out"
+                  class="relative h-full w-full object-cover transition-all duration-1000 ease-out"
                   :class="loaded[image.id] ? 'opacity-100 blur-0 scale-100' : 'opacity-0 blur-md scale-105'"
                   :src="image.src"
                   :alt="`Generated portrait ${image.number}`"
@@ -292,7 +301,12 @@
         </template>
       </section>
 
-      <footer class="border-t border-zinc-200 py-6 text-center text-sm text-zinc-600" aria-live="polite">
+      <footer class="flex items-center justify-center gap-3 border-t border-zinc-200 py-6 text-center text-sm text-zinc-600" aria-live="polite">
+        <span
+          x-show="!isBatchLoaded(page) || pendingNextBatch"
+          class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-950"
+          aria-label="Loading"
+        ></span>
         <span x-text="batchStatus()"></span>
       </footer>
     </main>
