@@ -30,7 +30,7 @@
           batchId: Date.now(),
           visibleImages: [],
           sourceQueue: [],
-          addTimer: null,
+          sourceActive: false,
           scrollHandler: null,
           nearBottom: false,
           pendingNextBatch: false,
@@ -102,19 +102,27 @@
           },
 
           startSourceQueue() {
-            if (this.addTimer) {
+            if (this.sourceActive) {
               return;
             }
-            this.addTimer = setInterval(() => {
-              const image = this.sourceQueue.shift();
-              if (!image) {
-                clearInterval(this.addTimer);
-                this.addTimer = null;
-                return;
-              }
-              image.src = `${this.imageUrl}?page=${image.page}&slot=${image.slot}&batch=${this.batchId}`;
-              this.markLoading(image.id);
-            }, 1000);
+            this.assignNextSource();
+          },
+
+          assignNextSource() {
+            const image = this.sourceQueue.shift();
+            if (!image) {
+              this.sourceActive = false;
+              return false;
+            }
+            this.sourceActive = true;
+            image.src = `${this.imageUrl}?page=${image.page}&slot=${image.slot}&batch=${this.batchId}`;
+            this.markLoading(image.id);
+            return true;
+          },
+
+          continueSourceQueue() {
+            this.sourceActive = false;
+            this.startSourceQueue();
           },
 
           handleScroll() {
@@ -173,12 +181,14 @@
             this.loading[id] = false;
             this.loaded[id] = true;
             this.checkPendingBatch();
+            this.continueSourceQueue();
           },
 
           markFailed(id) {
             this.loading[id] = false;
             this.loaded[id] = false;
             this.failed[id] = true;
+            this.continueSourceQueue();
           },
 
           navigate(page) {
@@ -195,45 +205,48 @@
   </head>
   <body class="min-h-screen bg-zinc-50 text-zinc-950">
     <main x-data="gallery" x-init="init()" class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
-      <header class="flex flex-col gap-4 border-b border-zinc-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <header class="flex flex-col gap-3 border-b border-zinc-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold tracking-normal text-zinc-950 sm:text-3xl">
+          <h1 class="text-xl font-semibold tracking-normal text-zinc-950 sm:text-2xl">
             This Person Does Not Exist
           </h1>
-          <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
+          <p class="mt-1 max-w-2xl text-xs leading-5 text-zinc-600 sm:text-sm">
             Twenty generated portraits per page. Every tile uses the same image source:
             <span class="font-mono text-xs text-zinc-800">https://thispersondoesnotexist.com</span>
           </p>
         </div>
 
-        <nav class="flex flex-wrap items-center gap-2" aria-label="Gallery navigation">
+        <nav class="inline-flex h-9 w-fit overflow-hidden rounded-md border border-zinc-300 bg-white shadow-sm" aria-label="Gallery navigation">
           <button
             type="button"
-            class="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-45"
+            class="inline-flex h-9 w-9 items-center justify-center border-r border-zinc-300 text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-45"
             :disabled="page === 1"
             @click="navigate(page - 1)"
+            title="Previous page"
+            aria-label="Previous page"
           >
             <i data-lucide="chevron-left" class="h-4 w-4" aria-hidden="true"></i>
-            Previous
           </button>
-          <div class="flex h-10 items-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700">
+          <div class="flex h-9 min-w-20 items-center justify-center border-r border-zinc-300 px-3 text-xs font-medium text-zinc-700">
             Page <span class="ml-1 tabular-nums" x-text="page"></span>
           </div>
           <button
             type="button"
-            class="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-100"
+            class="inline-flex h-9 w-9 items-center justify-center border-r border-zinc-300 text-zinc-800 transition hover:bg-zinc-100"
             @click="navigate(page + 1)"
+            title="Next page"
+            aria-label="Next page"
           >
-            Next
             <i data-lucide="chevron-right" class="h-4 w-4" aria-hidden="true"></i>
           </button>
           <button
             type="button"
-            class="inline-flex h-10 items-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800"
+            class="inline-flex h-9 w-9 items-center justify-center bg-zinc-950 text-white transition hover:bg-zinc-800"
             @click="reload()"
+            title="Reload"
+            aria-label="Reload"
           >
             <i data-lucide="refresh-cw" class="h-4 w-4" aria-hidden="true"></i>
-            Reload
           </button>
         </nav>
       </header>
@@ -249,7 +262,7 @@
                 aria-hidden="true"
               ></div>
               <div
-                x-show="!image.src || loading[image.id]"
+                x-show="loading[image.id]"
                 class="absolute inset-0 grid place-items-center"
               >
                 <div class="h-8 w-8 animate-spin rounded-full border-2 border-white/60 border-t-zinc-950 shadow-sm" aria-label="Loading"></div>
