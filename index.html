@@ -5,7 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>This Person Does Not Exist Browser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@300&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .adaptive-container {
+        container-type: inline-size;
+        width: 100%;
+      }
+      .adaptive-text {
+        font-size: 7.4cqw;
+        line-height: 1;
+        white-space: nowrap;
+        padding-inline: 4cqw;
+      }
+      @media (min-width: 1280px) {
+        .adaptive-text {
+          font-size: 96px; /* Adjusted for 2.0 version length */
+        }
+      }
+    </style>
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
@@ -17,6 +37,7 @@
           extend: {
             fontFamily: {
               sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+              oswald: ["Oswald", "sans-serif"],
             },
           },
         },
@@ -38,14 +59,27 @@
           loaded: {},
           failed: {},
           selectedImage: null,
+          bookmarks: [],
+          showBookmarks: false,
 
           init() {
+            this.bookmarks = JSON.parse(localStorage.getItem("bookmarks") || "[]");
             const params = new URLSearchParams(window.location.search);
-            const requestedPage = Number(params.get("page"));
-            this.page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-            this.addBatch(this.page);
-            this.scrollHandler = () => this.handleScroll();
-            window.addEventListener("scroll", this.scrollHandler, { passive: true });
+            this.showBookmarks = params.get("view") === "bookmarks";
+
+            if (this.showBookmarks) {
+              this.visibleImages = [...this.bookmarks];
+              // Mark all bookmarked images as loaded since we already have their sources
+              this.bookmarks.forEach(img => {
+                this.loaded[img.id] = true;
+              });
+            } else {
+              const requestedPage = Number(params.get("page"));
+              this.page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+              this.addBatch(this.page);
+              window.addEventListener("scroll", () => this.handleScroll(), { passive: true });
+            }
+
             this.$nextTick(() => {
               if (window.lucide) {
                 window.lucide.createIcons();
@@ -63,6 +97,59 @@
                 document.body.classList.remove("overflow-hidden");
               }
             });
+          },
+
+          async toggleBookmark(image) {
+            const index = this.bookmarks.findIndex(b => b.src === image.src || (b.originalSrc === image.src));
+            
+            if (index > -1) {
+              this.bookmarks.splice(index, 1);
+              this.persistBookmarks();
+              return;
+            }
+
+            if (this.bookmarks.length >= 10) {
+              alert("Bookmark limit reached (max 10). Please remove some to save new ones.");
+              return;
+            }
+
+            try {
+              // Convert image to base64 to save the "full image" data
+              const response = await fetch(image.src);
+              const blob = await response.blob();
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64data = reader.result;
+                this.bookmarks.push({ 
+                  ...image, 
+                  originalSrc: image.src, // Keep original for reference
+                  src: base64data,        // Replace src with base64 for persistence
+                  id: `bookmark-${Date.now()}` 
+                });
+                this.persistBookmarks();
+              };
+              reader.readAsDataURL(blob);
+            } catch (e) {
+              console.error("Failed to save full image:", e);
+              // Fallback to just saving the URL if fetch fails
+              this.bookmarks.push({ ...image, id: `bookmark-${Date.now()}` });
+              this.persistBookmarks();
+            }
+          },
+
+          persistBookmarks() {
+            localStorage.setItem("bookmarks", JSON.stringify(this.bookmarks));
+            if (window.lucide) {
+              this.$nextTick(() => window.lucide.createIcons());
+            }
+          },
+
+          isBookmarked(image) {
+            return this.bookmarks.some(b => b.src === image.src || b.originalSrc === image.src);
+          },
+
+          viewBookmarks() {
+            window.location.href = `${window.location.pathname}?view=bookmarks`;
           },
 
           buildImages(page) {
@@ -135,6 +222,9 @@
 
           continueSourceQueue() {
             this.sourceActive = false;
+            if (window.lucide) {
+              window.lucide.createIcons();
+            }
             setTimeout(() => this.startSourceQueue(), 1000);
           },
 
@@ -224,12 +314,15 @@
   </head>
   <body x-data="gallery" class="flex min-h-screen flex-col bg-white text-zinc-950">
     <div class="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-      <header class="flex flex-col items-center gap-6 border-b border-zinc-200 pb-8">
-        <img 
-          src="header.png" 
-          alt="This Person Does Not Exist - Browse AI-generated realistic human portraits" 
-          class="mx-auto w-full max-w-7xl object-contain"
-        />
+      <header class="flex flex-col items-center gap-6 border-b border-zinc-200 pb-10 text-center">
+        <div class="adaptive-container flex flex-col items-center gap-4">
+          <h1 class="adaptive-text font-oswald font-light uppercase tracking-normal text-zinc-950">
+            This Person Does Not Exist 2.0
+          </h1>
+          <p class="text-xs font-medium text-zinc-500">
+            Browse AI-generated realistic human portraits
+          </p>
+        </div>
 
         <nav class="flex w-full overflow-hidden rounded-md border border-zinc-300 bg-white shadow-sm sm:w-fit" aria-label="Gallery navigation">
           <button
@@ -242,9 +335,6 @@
           >
             <i data-lucide="chevron-left" class="h-3.5 w-3.5" aria-hidden="true"></i>
           </button>
-          <div class="flex h-7 min-w-16 flex-1 items-center justify-center border-r border-zinc-300 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-600 sm:flex-none">
-            Page <span class="ml-1 tabular-nums" x-text="page"></span>
-          </div>
           <button
             type="button"
             class="inline-flex h-7 w-9 flex-shrink-0 items-center justify-center border-r border-zinc-300 text-zinc-800 transition hover:bg-zinc-100"
@@ -253,6 +343,16 @@
             aria-label="Next page"
           >
             <i data-lucide="chevron-right" class="h-3.5 w-3.5" aria-hidden="true"></i>
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-7 w-9 flex-shrink-0 items-center justify-center border-r border-zinc-300 transition hover:bg-zinc-100"
+            :class="showBookmarks ? 'bg-zinc-950 text-white hover:bg-zinc-800' : 'text-zinc-800'"
+            @click="viewBookmarks()"
+            title="Bookmarks"
+            aria-label="Bookmarks"
+          >
+            <i data-lucide="bookmark" class="h-3.5 w-3.5" aria-hidden="true"></i>
           </button>
           <button
             type="button"
@@ -306,20 +406,32 @@
                 Image failed to load
               </div>
             </div>
-            <div class="flex h-10 items-center border-t border-zinc-200 px-3 text-xs text-zinc-600">
-              <span>#<span x-text="image.number"></span></span>
+            <div 
+              class="flex h-10 items-center border-t border-zinc-200 px-3 transition-colors"
+              :class="isBookmarked(image) ? 'text-zinc-950 bg-zinc-50' : 'text-zinc-400'"
+              @click.stop="toggleBookmark(image)"
+            >
+              <i :data-lucide="isBookmarked(image) ? 'bookmark-check' : 'bookmark'" class="h-4 w-4 transition-colors hover:text-zinc-950 cursor-pointer"></i>
+              <span x-show="isBookmarked(image)" class="ml-2 text-[10px] font-bold uppercase tracking-wider">Saved</span>
             </div>
           </article>
         </template>
       </section>
 
       <div class="flex items-center justify-center gap-3 py-8 text-center text-xs font-medium text-zinc-600" aria-live="polite">
-        <span
-          x-show="!isBatchLoaded(page) || pendingNextBatch"
-          class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-950"
-          aria-label="Loading"
-        ></span>
-        <span x-text="batchStatus()"></span>
+        <template x-if="!showBookmarks">
+          <div class="flex items-center gap-3">
+            <span
+              x-show="!isBatchLoaded(page) || pendingNextBatch"
+              class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-950"
+              aria-label="Loading"
+            ></span>
+            <span x-text="batchStatus()"></span>
+          </div>
+        </template>
+        <template x-if="showBookmarks">
+          <span x-text="bookmarks.length > 0 ? `You have ${bookmarks.length} saved ${bookmarks.length === 1 ? 'portrait' : 'portraits'}.` : 'No saved portraits yet.'"></span>
+        </template>
       </div>
     </div>
 
